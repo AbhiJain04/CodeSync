@@ -51,7 +51,7 @@ app.post('/execute', (req, res) => {
           ).join(' ') + '\n';
         },
         error: (...args) => { output += '❌ ' + args.join(' ') + '\n'; },
-        warn: (...args) => { output += '⚠️ ' + args.join(' ') + '\n'; },
+        warn:  (...args) => { output += '⚠️ ' + args.join(' ') + '\n'; },
       };
 
       const context = vm.createContext({
@@ -70,111 +70,112 @@ app.post('/execute', (req, res) => {
   }
 
   // ----------------------------------------
-  // ALL OTHER LANGUAGES
-  // Uses the same pattern:
-  // 1. Write code to temp file
-  // 2. Compile (if needed)
-  // 3. Run
-  // 4. Return output
-  // 5. Cleanup temp files
+  // PYTHON
   // ----------------------------------------
+  if (language === 'python') {
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 
-  // Config for each language
-  const LANGUAGE_CONFIG = {
-    python: {
-      filename: 'main.py',
-      // On Windows: python, on Linux/Mac: python3
-      runCommand: (file) => `python3 "${file}"`,
-      compileCommand: null, // Python doesn't need compilation
-    },
-    cpp: {
-      filename: 'main.cpp',
-      compileCommand: (source, output) => `g++ "${source}" -o "${output}"`,
-      runCommand: (file) => `"${file}"`,
-    },
-    java: {
-      filename: 'Main.java', // Java filename MUST match the class name
-      compileCommand: (source) => `javac "${source}"`,
-      // Java runs from the directory, not the file directly
-      runCommand: (file, dir) => `java -cp "${dir}" Main`,
-    },
-    typescript: {
-      filename: 'main.ts',
-      compileCommand: null,
-      // Use local ts-node instead of global
-      runCommand: (file) => `./node_modules/.bin/ts-node "${file}"`,
-    },
-  };
+    const uniqueId = Date.now();
+    const sourceFile = path.join(tempDir, `${uniqueId}_main.py`);
+    fs.writeFileSync(sourceFile, code);
 
-  const config = LANGUAGE_CONFIG[language];
-
-  // Language not in our supported list
-  if (!config) {
-    return res.json({ output: 'Language not supported.' });
+    exec(`python3 "${sourceFile}"`, { timeout: 5000 }, (error, stdout, stderr) => {
+      cleanup(sourceFile);
+      if (error && !stdout) return res.json({ output: '❌ Error:\n' + stderr });
+      return res.json({ output: stdout || stderr || 'No output produced.' });
+    });
+    return;
   }
 
-  // Create temp directory if it doesn't exist
-  const tempDir = path.join(__dirname, 'temp');
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir);
-  }
+  // ----------------------------------------
+  // C++
+  // ----------------------------------------
+  if (language === 'cpp') {
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 
-  // Unique ID so multiple users don't overwrite each other's files
-  const uniqueId = Date.now();
-  const sourceFile = path.join(tempDir, `${uniqueId}_${config.filename}`);
+    const uniqueId = Date.now();
+    const sourceFile = path.join(tempDir, `${uniqueId}_main.cpp`);
+    const outputFile = path.join(tempDir, `${uniqueId}_output`);
+    fs.writeFileSync(sourceFile, code);
 
-  // For compiled languages we need a separate output file
-  const outputFile = path.join(tempDir, `${uniqueId}_output`);
-
-  // Step 1: Write code to temp file
-  fs.writeFileSync(sourceFile, code);
-
-  // Step 2: If language needs compilation, compile first
-  if (config.compileCommand) {
-    const compileCmd = config.compileCommand(sourceFile, outputFile);
-
-    exec(compileCmd, { timeout: 10000 }, (compileError, _, compileStderr) => {
+    exec(`g++ "${sourceFile}" -o "${outputFile}"`, { timeout: 10000 }, (compileError, _, compileStderr) => {
       if (compileError) {
         cleanup(sourceFile, outputFile);
         return res.json({ output: '❌ Compilation Error:\n' + compileStderr });
       }
 
-      // Step 3: Run after successful compilation
-      const runCmd = config.runCommand(outputFile, tempDir);
-      exec(runCmd, { timeout: 5000 }, (runError, stdout, stderr) => {
+      exec(`"${outputFile}"`, { timeout: 5000 }, (runError, stdout, stderr) => {
         cleanup(sourceFile, outputFile);
-
-        if (runError && !stdout) {
-          return res.json({ output: '❌ Runtime Error:\n' + stderr });
-        }
+        if (runError && !stdout) return res.json({ output: '❌ Runtime Error:\n' + stderr });
         return res.json({ output: stdout || stderr || 'No output produced.' });
       });
     });
-
-  } else {
-    // Step 3: No compilation needed — just run directly (Python, TypeScript)
-    const runCmd = config.runCommand(sourceFile, tempDir);
-    exec(runCmd, { timeout: 5000 }, (runError, stdout, stderr) => {
-      cleanup(sourceFile);
-
-      if (runError && !stdout) {
-        return res.json({ output: '❌ Error:\n' + stderr });
-      }
-      return res.json({ output: stdout || stderr || 'No output produced.' });
-    });
+    return;
   }
 
-  return; // Prevents "headers already sent" error
+  // ----------------------------------------
+  // JAVA
+  // ----------------------------------------
+  if (language === 'java') {
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+    const uniqueId = Date.now();
+    // Java folder — each java program needs its own folder
+    const javaDir = path.join(tempDir, `java_${uniqueId}`);
+    fs.mkdirSync(javaDir);
+    const sourceFile = path.join(javaDir, 'Main.java');
+    fs.writeFileSync(sourceFile, code);
+
+    exec(`javac "${sourceFile}"`, { timeout: 10000 }, (compileError, _, compileStderr) => {
+      if (compileError) {
+        cleanup(sourceFile);
+        fs.rmdirSync(javaDir, { recursive: true });
+        return res.json({ output: '❌ Compilation Error:\n' + compileStderr });
+      }
+
+      exec(`java -cp "${javaDir}" Main`, { timeout: 5000 }, (runError, stdout, stderr) => {
+        fs.rmdirSync(javaDir, { recursive: true });
+        if (runError && !stdout) return res.json({ output: '❌ Runtime Error:\n' + stderr });
+        return res.json({ output: stdout || stderr || 'No output produced.' });
+      });
+    });
+    return;
+  }
+
+  // ----------------------------------------
+  // TYPESCRIPT
+  // ----------------------------------------
+  if (language === 'typescript') {
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+    const uniqueId = Date.now();
+    const sourceFile = path.join(tempDir, `${uniqueId}_main.ts`);
+    fs.writeFileSync(sourceFile, code);
+
+    // Use local ts-node installed in node_modules
+    const tsNode = path.join(__dirname, 'node_modules', '.bin', 'ts-node');
+
+    exec(`"${tsNode}" "${sourceFile}"`, { timeout: 10000 }, (error, stdout, stderr) => {
+      cleanup(sourceFile);
+      if (error && !stdout) return res.json({ output: '❌ Error:\n' + stderr });
+      return res.json({ output: stdout || stderr || 'No output produced.' });
+    });
+    return;
+  }
+
+  return res.json({ output: 'Language not supported.' });
 });
 
-// Cleanup helper — deletes temp files after execution
+// Cleanup helper
 function cleanup(...files) {
   files.forEach(file => {
     try {
       if (fs.existsSync(file)) fs.unlinkSync(file);
-    } catch (e) {
-      // Ignore cleanup errors
-    }
+    } catch (e) {}
   });
 }
 
