@@ -119,65 +119,18 @@ app.post('/execute', (req, res) => {
   // JAVA
   // ----------------------------------------
   if (language === 'java') {
-    const tempDir = path.join(__dirname, 'temp');
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
-
-    const uniqueId = Date.now();
-    const javaDir = path.join(tempDir, `java_${uniqueId}`);
-    fs.mkdirSync(javaDir);
-    const sourceFile = path.join(javaDir, 'Main.java');
-    fs.writeFileSync(sourceFile, code);
-
-    // Try common java paths on Linux
-    const javaPaths = [
-      'java',
-      '/usr/bin/java',
-      '/usr/local/bin/java',
-      '/opt/java/bin/java',
-    ];
-
-    const javaCmd = javaPaths[0];
-    const javacCmd = 'javac';
-
-    exec(`${javacCmd} "${sourceFile}"`, { timeout: 10000 }, (compileError, _, compileStderr) => {
-      if (compileError) {
-        fs.rmSync(javaDir, { recursive: true, force: true });
-        return res.json({ output: '❌ Compilation Error:\n' + compileStderr });
-      }
-
-      exec(`${javaCmd} -cp "${javaDir}" Main`, { timeout: 5000 }, (runError, stdout, stderr) => {
-        fs.rmSync(javaDir, { recursive: true, force: true });
-        if (runError && !stdout) return res.json({ output: '❌ Runtime Error:\n' + stderr });
-        return res.json({ output: stdout || stderr || 'No output produced.' });
-      });
+    return res.json({
+      output: 'Java is not supported on this server yet.\nPlease use JavaScript, Python, or C++.'
     });
-    return;
   }
 
   // ----------------------------------------
   // TYPESCRIPT
   // ----------------------------------------
   if (language === 'typescript') {
-    const tempDir = path.join(__dirname, 'temp');
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
-
-    const uniqueId = Date.now();
-    const sourceFile = path.join(tempDir, `${uniqueId}_main.ts`);
-    fs.writeFileSync(sourceFile, code);
-
-    const tsNode = path.join(__dirname, 'node_modules', '.bin', 'ts-node');
-
-    // --transpile-only skips type checking, just runs the code
-    exec(`node "${tsNode}" --transpile-only "${sourceFile}"`,
-      { timeout: 10000 },
-      (error, stdout, stderr) => {
-        cleanup(sourceFile);
-        if (stdout) return res.json({ output: stdout });
-        if (stderr) return res.json({ output: '❌ Error:\n' + stderr });
-        return res.json({ output: 'No output produced.' });
-      }
-    );
-    return;
+    return res.json({
+      output: 'TypeScript is not supported on this server yet.\nPlease use JavaScript, Python, or C++.'
+    });
   }
 
   return res.json({ output: 'Language not supported.' });
