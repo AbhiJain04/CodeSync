@@ -119,42 +119,41 @@ app.post('/execute', (req, res) => {
   // JAVA
   // ----------------------------------------
   if (language === 'java') {
-    // First check if java is available on this system
-    exec('which javac', (checkError) => {
-      if (checkError) {
-        return res.json({
-          output: '❌ Java is not available on this server.\nTry JavaScript, Python, C++, or TypeScript instead.'
-        });
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+    const uniqueId = Date.now();
+    const javaDir = path.join(tempDir, `java_${uniqueId}`);
+    fs.mkdirSync(javaDir);
+    const sourceFile = path.join(javaDir, 'Main.java');
+    fs.writeFileSync(sourceFile, code);
+
+    // Try common java paths on Linux
+    const javaPaths = [
+      'java',
+      '/usr/bin/java',
+      '/usr/local/bin/java',
+      '/opt/java/bin/java',
+    ];
+
+    const javaCmd = javaPaths[0];
+    const javacCmd = 'javac';
+
+    exec(`${javacCmd} "${sourceFile}"`, { timeout: 10000 }, (compileError, _, compileStderr) => {
+      if (compileError) {
+        fs.rmSync(javaDir, { recursive: true, force: true });
+        return res.json({ output: '❌ Compilation Error:\n' + compileStderr });
       }
 
-      const tempDir = path.join(__dirname, 'temp');
-      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
-
-      const uniqueId = Date.now();
-      const javaDir = path.join(tempDir, `java_${uniqueId}`);
-      fs.mkdirSync(javaDir);
-      const sourceFile = path.join(javaDir, 'Main.java');
-      fs.writeFileSync(sourceFile, code);
-
-      exec(`javac "${sourceFile}"`, { timeout: 10000 }, (compileError, _, compileStderr) => {
-        if (compileError) {
-          fs.rmdirSync(javaDir, { recursive: true });
-          return res.json({ output: '❌ Compilation Error:\n' + compileStderr });
-        }
-
-        exec(`java -cp "${javaDir}" Main`, { timeout: 5000 }, (runError, stdout, stderr) => {
-          fs.rmdirSync(javaDir, { recursive: true });
-          if (runError && !stdout) return res.json({ output: '❌ Runtime Error:\n' + stderr });
-          return res.json({ output: stdout || stderr || 'No output produced.' });
-        });
+      exec(`${javaCmd} -cp "${javaDir}" Main`, { timeout: 5000 }, (runError, stdout, stderr) => {
+        fs.rmSync(javaDir, { recursive: true, force: true });
+        if (runError && !stdout) return res.json({ output: '❌ Runtime Error:\n' + stderr });
+        return res.json({ output: stdout || stderr || 'No output produced.' });
       });
     });
     return;
   }
 
-  // ----------------------------------------
-  // TYPESCRIPT
-  // ----------------------------------------
   // ----------------------------------------
   // TYPESCRIPT
   // ----------------------------------------
@@ -168,12 +167,16 @@ app.post('/execute', (req, res) => {
 
     const tsNode = path.join(__dirname, 'node_modules', '.bin', 'ts-node');
 
-    exec(`"${tsNode}" "${sourceFile}"`, { timeout: 10000 }, (error, stdout, stderr) => {
-      cleanup(sourceFile);
-      if (stdout) return res.json({ output: stdout });
-      if (stderr) return res.json({ output: '❌ Error:\n' + stderr });
-      return res.json({ output: 'No output produced.' });
-    });
+    // --transpile-only skips type checking, just runs the code
+    exec(`node "${tsNode}" --transpile-only "${sourceFile}"`,
+      { timeout: 10000 },
+      (error, stdout, stderr) => {
+        cleanup(sourceFile);
+        if (stdout) return res.json({ output: stdout });
+        if (stderr) return res.json({ output: '❌ Error:\n' + stderr });
+        return res.json({ output: 'No output produced.' });
+      }
+    );
     return;
   }
 
