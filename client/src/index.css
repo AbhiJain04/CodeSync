@@ -1,0 +1,14 @@
+/* Reset default browser styles so our app looks consistent everywhere */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #1e1e1e;  /* Dark background like VS Code */
+  color: #ffffff;
+  font-family: 'Segoe UI', sans-serif;
+  height: 100vh;
+  overflow: hidden;
+}
