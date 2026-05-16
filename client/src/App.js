@@ -9,7 +9,7 @@ import { executeCode } from './executeCode';
 
 // Create socket connection OUTSIDE the component
 // This ensures only ONE connection is made, not a new one on every render
-const socket = io('http://localhost:5000');
+const socket = io('https://codesync-server-zj5l.onrender.com');
 
 function App() {
   const [joined, setJoined] = useState(false);

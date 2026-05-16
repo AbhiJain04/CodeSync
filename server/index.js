@@ -8,16 +8,24 @@ const fs = require('fs');                    // Reads and writes files
 const path = require('path');               // Handles file paths safely
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    "https://codesync.vercel.app"
+  ]
+}));
 app.use(express.json()); // Must be before routes so we can read request body
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
-    cors: {
-        origin: "http://localhost:3000",
-        methods: ["GET", "POST"]
-    }
+  cors: {
+    origin: [
+      "http://localhost:3000",
+      "https://codesync.vercel.app"
+    ],
+    methods: ["GET", "POST"]
+  }
 });
 
 // ----------------------------------------

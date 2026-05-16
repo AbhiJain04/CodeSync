@@ -3,7 +3,7 @@
 
 export const executeCode = async (code, language) => {
   try {
-    const response = await fetch('http://localhost:5000/execute', {
+    const response = await fetch('https://codesync-server-zj5l.onrender.com/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, language }),
