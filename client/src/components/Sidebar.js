@@ -4,7 +4,7 @@
 import React from 'react';
 
 // Available languages for our editor
-const LANGUAGES = ['javascript', 'python', 'cpp', 'java', 'typescript'];
+const LANGUAGES = ['javascript', 'python', 'cpp', 'java'];
 
 function Sidebar({ roomId, users, language, onLanguageChange }) {
   // This function copies the room ID to clipboard when clicked
