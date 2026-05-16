@@ -51,7 +51,7 @@ app.post('/execute', (req, res) => {
           ).join(' ') + '\n';
         },
         error: (...args) => { output += '❌ ' + args.join(' ') + '\n'; },
-        warn:  (...args) => { output += '⚠️ ' + args.join(' ') + '\n'; },
+        warn: (...args) => { output += '⚠️ ' + args.join(' ') + '\n'; },
       };
 
       const context = vm.createContext({
@@ -101,7 +101,8 @@ app.post('/execute', (req, res) => {
     typescript: {
       filename: 'main.ts',
       compileCommand: null,
-      runCommand: (file) => `ts-node "${file}"`,
+      // Use local ts-node instead of global
+      runCommand: (file) => `./node_modules/.bin/ts-node "${file}"`,
     },
   };
 
@@ -181,72 +182,72 @@ function cleanup(...files) {
 // SOCKET.IO — Real-time collaboration logic
 // ----------------------------------------
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+  console.log('User connected:', socket.id);
 
-    // User joins a room
-    socket.on('join-room', ({ roomId, username }) => {
-        socket.join(roomId);
-        socket.username = username;
-        socket.roomId = roomId;
+  // User joins a room
+  socket.on('join-room', ({ roomId, username }) => {
+    socket.join(roomId);
+    socket.username = username;
+    socket.roomId = roomId;
 
-        // Initialize room if first person joining
-        if (!roomData[roomId]) {
-            roomData[roomId] = {
-                code: '// Start coding here...\n',
-                language: 'javascript'
-            };
-        }
+    // Initialize room if first person joining
+    if (!roomData[roomId]) {
+      roomData[roomId] = {
+        code: '// Start coding here...\n',
+        language: 'javascript'
+      };
+    }
 
-        // Send current room state to the person who just joined
-        socket.emit('room-joined', {
-            code: roomData[roomId].code,
-            language: roomData[roomId].language
-        });
+    // Send current room state to the person who just joined
+    socket.emit('room-joined', {
+      code: roomData[roomId].code,
+      language: roomData[roomId].language
+    });
 
-        // Build and broadcast updated users list to everyone in room
-        const clients = io.sockets.adapter.rooms.get(roomId);
-        const users = [];
+    // Build and broadcast updated users list to everyone in room
+    const clients = io.sockets.adapter.rooms.get(roomId);
+    const users = [];
+    clients.forEach((clientId) => {
+      const clientSocket = io.sockets.sockets.get(clientId);
+      if (clientSocket?.username) {
+        users.push(clientSocket.username);
+      }
+    });
+    io.to(roomId).emit('users-updated', users);
+
+    console.log(`${username} joined room ${roomId}`);
+  });
+
+  // Someone typed in the editor
+  socket.on('code-change', ({ roomId, code }) => {
+    if (roomData[roomId]) roomData[roomId].code = code;
+    // Send to everyone EXCEPT the person who typed
+    socket.to(roomId).emit('code-updated', code);
+  });
+
+  // Someone changed the language
+  socket.on('language-change', ({ roomId, language }) => {
+    if (roomData[roomId]) roomData[roomId].language = language;
+    // Send to everyone INCLUDING the person who changed it
+    io.to(roomId).emit('language-updated', language);
+  });
+
+  // Someone disconnected
+  socket.on('disconnect', () => {
+    const { roomId, username } = socket;
+    if (roomId && username) {
+      const clients = io.sockets.adapter.rooms.get(roomId);
+      const users = [];
+      if (clients) {
         clients.forEach((clientId) => {
-            const clientSocket = io.sockets.sockets.get(clientId);
-            if (clientSocket?.username) {
-                users.push(clientSocket.username);
-            }
+          const clientSocket = io.sockets.sockets.get(clientId);
+          if (clientSocket?.username) users.push(clientSocket.username);
         });
-        io.to(roomId).emit('users-updated', users);
-
-        console.log(`${username} joined room ${roomId}`);
-    });
-
-    // Someone typed in the editor
-    socket.on('code-change', ({ roomId, code }) => {
-        if (roomData[roomId]) roomData[roomId].code = code;
-        // Send to everyone EXCEPT the person who typed
-        socket.to(roomId).emit('code-updated', code);
-    });
-
-    // Someone changed the language
-    socket.on('language-change', ({ roomId, language }) => {
-        if (roomData[roomId]) roomData[roomId].language = language;
-        // Send to everyone INCLUDING the person who changed it
-        io.to(roomId).emit('language-updated', language);
-    });
-
-    // Someone disconnected
-    socket.on('disconnect', () => {
-        const { roomId, username } = socket;
-        if (roomId && username) {
-            const clients = io.sockets.adapter.rooms.get(roomId);
-            const users = [];
-            if (clients) {
-                clients.forEach((clientId) => {
-                    const clientSocket = io.sockets.sockets.get(clientId);
-                    if (clientSocket?.username) users.push(clientSocket.username);
-                });
-            }
-            io.to(roomId).emit('users-updated', users);
-            console.log(`${username} left room ${roomId}`);
-        }
-    });
+      }
+      io.to(roomId).emit('users-updated', users);
+      console.log(`${username} left room ${roomId}`);
+    }
+  });
 });
 
 // ----------------------------------------
