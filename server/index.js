@@ -51,7 +51,7 @@ app.post('/execute', (req, res) => {
           ).join(' ') + '\n';
         },
         error: (...args) => { output += '❌ ' + args.join(' ') + '\n'; },
-        warn:  (...args) => { output += '⚠️ ' + args.join(' ') + '\n'; },
+        warn: (...args) => { output += '⚠️ ' + args.join(' ') + '\n'; },
       };
 
       const context = vm.createContext({
@@ -159,11 +159,21 @@ app.post('/execute', (req, res) => {
     // Use local ts-node installed in node_modules
     const tsNode = path.join(__dirname, 'node_modules', '.bin', 'ts-node');
 
-    exec(`"${tsNode}" "${sourceFile}"`, { timeout: 10000 }, (error, stdout, stderr) => {
-      cleanup(sourceFile);
-      if (error && !stdout) return res.json({ output: '❌ Error:\n' + stderr });
-      return res.json({ output: stdout || stderr || 'No output produced.' });
-    });
+    // Add --skipLibCheck and --esModuleInterop to avoid common TS errors
+    exec(`"${tsNode}" --skipLibCheck --esModuleInterop "${sourceFile}"`,
+      { timeout: 10000 },
+      (error, stdout, stderr) => {
+        cleanup(sourceFile);
+        // Log for debugging
+        console.log('TS stdout:', stdout);
+        console.log('TS stderr:', stderr);
+        console.log('TS error:', error?.message);
+
+        if (stdout) return res.json({ output: stdout });
+        if (stderr) return res.json({ output: '❌ Error:\n' + stderr });
+        return res.json({ output: 'No output produced.' });
+      }
+    );
     return;
   }
 
@@ -175,7 +185,7 @@ function cleanup(...files) {
   files.forEach(file => {
     try {
       if (fs.existsSync(file)) fs.unlinkSync(file);
-    } catch (e) {}
+    } catch (e) { }
   });
 }
 
