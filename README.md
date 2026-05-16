@@ -157,10 +157,3 @@ CodeSync/
 
 The backend is hosted on Render's free tier which sleeps after 15 minutes of inactivity. The first load may take 20-30 seconds to wake up. After that, everything works normally.
 
----
-
-## 👤 Author
-
-**Abhishek Jain**  
-B.Tech Computer Science — 4th Year  
-[GitHub](https://github.com/AbhiJain04)
