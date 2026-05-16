@@ -11,7 +11,7 @@ const app = express();
 app.use(cors({
   origin: [
     "http://localhost:3000",
-    "https://codesync.vercel.app"
+    "https://code-sync-roan-eta.vercel.app"
   ]
 }));
 app.use(express.json()); // Must be before routes so we can read request body
@@ -22,7 +22,7 @@ const io = new Server(server, {
   cors: {
     origin: [
       "http://localhost:3000",
-      "https://codesync.vercel.app"
+      "https://code-sync-roan-eta.vercel.app"
     ],
     methods: ["GET", "POST"]
   }
